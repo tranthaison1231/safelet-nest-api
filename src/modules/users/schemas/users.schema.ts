@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
+import { OAuthProvider } from './oauth_providers.schema';
 
 export enum UserRole {
   user = 'user',
@@ -54,6 +55,13 @@ export class User {
     default: UserRole.user,
   })
   role: string;
+
+  @Prop({
+    type: [Types.ObjectId],
+    ref: OAuthProvider.name,
+    default: [],
+  })
+  oauthProviders: OAuthProvider[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -8,10 +8,15 @@ import { RedisModule } from '@liaoliaots/nestjs-redis';
 import { S3ManagerModule } from './modules/common/s3/s3.module';
 import { AwsSdkModule } from 'aws-sdk-v3-nest';
 import { S3Client } from '@aws-sdk/client-s3';
+import { OAuth2Module } from './modules/oauth2/oauth2.module';
+import { config } from './config';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [config],
+    }),
     UsersModule,
     AuthModule,
     RedisModule.forRootAsync({
@@ -64,6 +69,7 @@ import { S3Client } from '@aws-sdk/client-s3';
       inject: [ConfigService],
     }),
     S3ManagerModule,
+    OAuth2Module,
   ],
 })
 export class AppModule {}

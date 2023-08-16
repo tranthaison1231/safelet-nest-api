@@ -10,11 +10,15 @@ import { SignInDto, SignUpDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 import { comparePassword, hashPassword } from 'src/shared/utils/password';
 import { ERROR_CODE } from 'src/shared/constants/error-code';
+import { OAuthProvider } from './schemas/oauth_providers.schema';
+import { OAuthProvidersEnum } from './enums/oauth-providers.enum';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectModel(OAuthProvider.name)
+    private readonly oauthProviderModel: Model<OAuthProvider>,
   ) {}
 
   getEvents(): string {
@@ -86,5 +90,45 @@ export class UsersService {
         _id: userID,
       })
       .exec();
+  }
+
+  public async findOrCreate(
+    provider: OAuthProvidersEnum,
+    providerId: string,
+    email: string,
+    name: string,
+  ) {
+    const user = await this.userModel
+      .findOne({
+        email: email,
+      })
+      .populate('oauthProviders');
+    if (!user) {
+      const createdProvider = await this.oauthProviderModel.create({
+        providerName: provider,
+        providerId: providerId,
+      });
+      const user = this.userModel.create({
+        email: email,
+        firstName: name.split(' ')[0],
+        lastName: name.split(' ')[1],
+        password: 'UNSET',
+        salt: 'UNSET',
+        isVerified: true,
+        oauthProviders: [createdProvider._id],
+      });
+      return user;
+    }
+    if (
+      !user.oauthProviders?.find((oauth) => oauth.providerName === provider)
+    ) {
+      const createdProvider = await this.oauthProviderModel.create({
+        providerName: provider,
+        providerId: providerId,
+      });
+      user.oauthProviders.push(createdProvider._id);
+      await user.save();
+    }
+    return user;
   }
 }

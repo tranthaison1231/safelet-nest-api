@@ -143,6 +143,7 @@ export class OAuth2Controller {
       name,
     );
     const webUrl = this.configService.get<string>('CLIENT_URL');
+    console.log(data.accessToken);
     return res
       .status(HttpStatus.PERMANENT_REDIRECT)
       .cookie('refreshToken', data.refreshToken, {

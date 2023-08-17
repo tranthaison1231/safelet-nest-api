@@ -107,7 +107,7 @@ export class Oauth2Service {
       email,
       name,
     );
-    return await this.authService.createToken(user.id);
+    return await this.authService.createToken({ userId: user._id.toString() });
   }
 
   public async getUserData<T extends Record<string, any>>(

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -133,5 +134,12 @@ export class AuthController {
     return {
       message: 'Logout successfully',
     };
+  }
+
+  @Get('/profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async profile(@GetUser() user: UserDocument) {
+    return user;
   }
 }

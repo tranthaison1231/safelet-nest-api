@@ -1,5 +1,5 @@
 export enum ERROR_CODE {
-  CONFLICT = 11000,
+  CONFLICT = 'P2002',
 }
 
 export const EXPIRES_IN = 3600;

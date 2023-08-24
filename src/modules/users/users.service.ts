@@ -3,36 +3,24 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User, UserDocument } from './schemas/users.schema';
-import { SignInDto, SignUpDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
-import { comparePassword, hashPassword } from 'src/shared/utils/password';
 import { ERROR_CODE } from 'src/shared/constants/error-code';
-import { OAuthProvider } from './schemas/oauth_providers.schema';
+import { comparePassword, hashPassword } from 'src/shared/utils/password';
+import { SignInDto, SignUpDto } from '../auth/dto/auth.dto';
 import { OAuthProvidersEnum } from './enums/oauth-providers.enum';
+import { PrismaService } from 'nestjs-prisma';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectModel(User.name) private readonly userModel: Model<User>,
-    @InjectModel(OAuthProvider.name)
-    private readonly oauthProviderModel: Model<OAuthProvider>,
-  ) {}
-
-  getEvents(): string {
-    return 'Hello Events!';
-  }
+  constructor(private prisma: PrismaService) {}
 
   async findAll(page = 1, limit = 10) {
     try {
-      const items = await this.userModel
-        .find()
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .exec();
-      const total = await this.userModel.countDocuments().exec();
+      const items = await this.prisma.user.findMany({
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+      const total = await this.prisma.user.count();
       return {
         items,
         page,
@@ -47,13 +35,16 @@ export class UsersService {
 
   async signUp(signUpDto: SignUpDto) {
     try {
-      const body: Partial<UserDocument> = signUpDto;
       const salt = await bcrypt.genSalt();
 
-      body.password = await hashPassword(signUpDto.password, salt);
-      body.salt = salt;
-
-      const user = await this.userModel.create(body);
+      const user = await this.prisma.user.create({
+        data: {
+          ...signUpDto,
+          password: await hashPassword(signUpDto.password, salt),
+          salt: salt,
+          isVerified: false,
+        },
+      });
       return user;
     } catch (error) {
       if (error.code === ERROR_CODE.CONFLICT) {
@@ -65,31 +56,35 @@ export class UsersService {
   }
 
   async validateUserPassword({ email, password }: SignInDto) {
-    const user = await this.userModel
-      .findOne({
-        email: email,
-      })
-      .exec();
+    const user = await this.findOneByEmail(email);
     if (user && (await comparePassword(password, user.password))) {
       return user.id;
     }
     return null;
   }
 
-  async findOneByEmail(email: string): Promise<UserDocument> {
-    return this.userModel
-      .findOne({
+  async findOneByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: {
         email: email,
-      })
-      .exec();
+      },
+    });
   }
 
-  async findOneById(userID: string): Promise<UserDocument> {
-    return this.userModel
-      .findOne({
-        _id: userID,
-      })
-      .exec();
+  async findOneById(userID: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userID,
+      },
+      include: {
+        roles: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+    return user;
   }
 
   public async findOrCreate(
@@ -98,36 +93,45 @@ export class UsersService {
     email: string,
     name: string,
   ) {
-    const user = await this.userModel
-      .findOne({
+    const user = await this.prisma.user.findUnique({
+      where: {
         email: email,
-      })
-      .populate('oauthProviders');
+      },
+      include: {
+        oauthProviders: true,
+      },
+    });
     if (!user) {
-      const createdProvider = await this.oauthProviderModel.create({
-        providerName: provider,
-        providerId: providerId,
+      const user = await this.prisma.user.create({
+        data: {
+          email: email,
+          firstName: name.split(' ')[0],
+          lastName: name.split(' ')[1],
+          password: 'UNSET',
+          salt: 'UNSET',
+          isVerified: true,
+        },
       });
-      const user = this.userModel.create({
-        email: email,
-        firstName: name.split(' ')[0],
-        lastName: name.split(' ')[1],
-        password: 'UNSET',
-        salt: 'UNSET',
-        isVerified: true,
-        oauthProviders: [createdProvider._id],
+      await this.prisma.oauthProvider.create({
+        data: {
+          providerName: provider,
+          providerId: providerId,
+          userId: user.id,
+        },
       });
+
       return user;
     }
     if (
       !user.oauthProviders?.find((oauth) => oauth.providerName === provider)
     ) {
-      const createdProvider = await this.oauthProviderModel.create({
-        providerName: provider,
-        providerId: providerId,
+      await this.prisma.oauthProvider.create({
+        data: {
+          providerName: provider,
+          providerId: providerId,
+          userId: user.id,
+        },
       });
-      user.oauthProviders.push(createdProvider._id);
-      await user.save();
     }
     return user;
   }

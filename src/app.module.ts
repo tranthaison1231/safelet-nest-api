@@ -1,10 +1,10 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
-import { MongooseModule } from '@nestjs/mongoose';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { RedisModule } from '@liaoliaots/nestjs-redis';
+import { PrismaModule, loggingMiddleware } from 'nestjs-prisma';
 import { S3ManagerModule } from './modules/common/s3/s3.module';
 import { AwsSdkModule } from 'aws-sdk-v3-nest';
 import { S3Client } from '@aws-sdk/client-s3';
@@ -16,6 +16,17 @@ import { config } from './config';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [config],
+    }),
+    PrismaModule.forRoot({
+      isGlobal: true,
+      prismaServiceOptions: {
+        middlewares: [
+          loggingMiddleware({
+            logger: new Logger('PrismaMiddleware'),
+            logLevel: 'log',
+          }),
+        ],
+      },
     }),
     UsersModule,
     AuthModule,
@@ -55,15 +66,6 @@ import { config } from './config';
           defaults: {
             from: `"No Reply" ${configService.get('MAIL_FROM')}>`,
           },
-        };
-      },
-      inject: [ConfigService],
-    }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
-        return {
-          uri: configService.get<string>('MONGO_URI'),
         };
       },
       inject: [ConfigService],

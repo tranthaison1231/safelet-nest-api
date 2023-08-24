@@ -12,7 +12,6 @@ import { EXPIRES_IN } from 'src/shared/constants/error-code';
 import { comparePassword, hashPassword } from 'src/shared/utils/password';
 import { generateOpaqueToken } from 'src/shared/utils/token';
 import { uuid } from 'src/shared/utils/uuid';
-import { UserDocument } from '../users/schemas/users.schema';
 import { UsersService } from '../users/users.service';
 import { CreateToken } from './auth.interface';
 import {
@@ -23,6 +22,8 @@ import {
 } from './dto/auth.dto';
 import { TokenPayloadDto } from './dto/token-payload.dto';
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from 'nestjs-prisma';
+import { User } from '@prisma/client';
 
 export const ACCESS_TOKEN_EXPIRE_IN = 60;
 export const REFRESH_TOKEN_EXPIRE_IN = 60 * 60 * 24 * 30;
@@ -30,6 +31,7 @@ export const REFRESH_TOKEN_EXPIRE_IN = 60 * 60 * 24 * 30;
 @Injectable()
 export class AuthService {
   constructor(
+    private prisma: PrismaService,
     private jwtService: JwtService,
     private usersService: UsersService,
     private mailService: MailerService,
@@ -80,7 +82,7 @@ export class AuthService {
   }: {
     email: string;
     token: string;
-    code;
+    code: string;
   }) {
     try {
       await this.mailService.sendMail({
@@ -100,7 +102,7 @@ export class AuthService {
     try {
       const user = await this.usersService.findOneByEmail(email);
       if (!user) throw new NotFoundException('User not found');
-      const token = await this.createToken({ userId: user._id.toString() });
+      const token = await this.createToken({ userId: user.id.toString() });
       await this.mailService.sendMail({
         to: user.email,
         subject: 'Reset Password',
@@ -114,18 +116,13 @@ export class AuthService {
     }
   }
 
-  async verifyEmail(user: UserDocument) {
+  async verifyEmail(user: User) {
     try {
       if (user.isVerified)
         throw new UnauthorizedException('User already verified');
-      const token = await this.createToken({ userId: user._id.toString() });
+      const token = await this.createToken({ userId: user.id.toString() });
       const code = uuid();
-      await this.redis.set(
-        `verify-email:${user._id}`,
-        code,
-        'EX',
-        60 * 60 * 24,
-      );
+      await this.redis.set(`verify-email:${user.id}`, code, 'EX', 60 * 60 * 24);
       await this.sendEmailVerification({
         email: user.email,
         token: token.accessToken,
@@ -137,23 +134,30 @@ export class AuthService {
     }
   }
 
-  async confirmEmail(user: UserDocument, code: string) {
+  async confirmEmail(user: User, code: string) {
     try {
-      const redisCode = await this.redis.get(`verify-email:${user._id}`);
+      const redisCode = await this.redis.get(`verify-email:${user.id}`);
       if (redisCode !== code) throw new UnauthorizedException('Invalid code');
       user.isVerified = true;
-      this.redis.del(`verify-email:${user._id}`);
-      await user.save();
+      this.redis.del(`verify-email:${user.id}`);
+      this.prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          isVerified: true,
+        },
+      });
     } catch (error) {
       console.error(error);
       throw error;
     }
   }
 
-  async logout(user: UserDocument) {
+  async logout(user: User) {
     try {
-      this.redis.del(`jwt-secret:${user._id}`);
-      this.redis.del(`refresh-token:${user._id}`);
+      this.redis.del(`jwt-secret:${user.id}`);
+      this.redis.del(`refresh-token:${user.id}`);
     } catch (error) {
       console.error(error);
       throw error;
@@ -170,7 +174,7 @@ export class AuthService {
 
   async changePassword(
     { newPassword, password }: ChangePasswordDto,
-    user: UserDocument,
+    user: User,
   ) {
     try {
       const isMatch = await comparePassword(password, user.password);
@@ -181,8 +185,14 @@ export class AuthService {
         );
       const salt = await bcrypt.genSalt();
 
-      user.password = await hashPassword(newPassword, salt);
-      return user.save();
+      this.prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          password: await hashPassword(newPassword, salt),
+        },
+      });
     } catch (error) {
       console.error(error);
       throw error;

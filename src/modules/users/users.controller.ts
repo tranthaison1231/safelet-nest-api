@@ -6,10 +6,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { PaginationRequestDto } from 'src/shared/utils/validators';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/shared/guards/jwt.guard';
+import { PaginationRequestDto } from 'src/shared/utils/validators';
+import { UsersService } from './users.service';
+import RoleGuard from 'src/shared/guards/role.guard';
+
 @ApiBearerAuth()
 @ApiTags('User')
 @Controller('/users')
@@ -19,12 +21,8 @@ export class UsersController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard(['GET_USERS']))
   async findAll(@Query() query: PaginationRequestDto) {
     return this.usersService.findAll(query.page, query.limit);
-  }
-
-  @Get(':userID/events')
-  getEvents(): string {
-    return this.usersService.getEvents();
   }
 }

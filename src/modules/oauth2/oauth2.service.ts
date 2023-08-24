@@ -83,7 +83,7 @@ export class Oauth2Service {
     provider: OAuthProvidersEnum,
     code: string,
     state: string,
-  ): Promise<string> {
+  ) {
     const oauth = this.getOAuth(provider);
     if (state !== oauth.state) {
       throw new UnauthorizedException('Corrupted state');
@@ -107,7 +107,7 @@ export class Oauth2Service {
       email,
       name,
     );
-    return await this.authService.createToken({ userId: user._id.toString() });
+    return await this.authService.createToken({ userId: user.id.toString() });
   }
 
   public async getUserData<T extends Record<string, any>>(

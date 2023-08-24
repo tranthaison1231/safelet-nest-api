@@ -24,26 +24,34 @@ export interface IClient {
   readonly idParamName?: string | undefined;
 }
 
-export class OAuthClass {
-  private static readonly [OAuthProvidersEnum.GOOGLE]: IProvider = {
+const OAuthProviders: Record<OAuthProvidersEnum, IProvider> = {
+  [OAuthProvidersEnum.GOOGLE]: {
     authorizeHost: 'https://accounts.google.com',
     authorizePath: '/o/oauth2/v2/auth',
     tokenHost: 'https://www.googleapis.com',
     tokenPath: '/oauth2/v4/token',
-  };
-  private static readonly [OAuthProvidersEnum.FACEBOOK]: IProvider = {
+  },
+  [OAuthProvidersEnum.FACEBOOK]: {
     authorizeHost: 'https://facebook.com',
     authorizePath: '/v9.0/dialog/oauth',
     tokenHost: 'https://graph.facebook.com',
     tokenPath: '/v9.0/oauth/access_token',
-  };
-  private static readonly [OAuthProvidersEnum.GITHUB]: IProvider = {
+  },
+  [OAuthProvidersEnum.GITHUB]: {
     authorizeHost: 'https://github.com',
     authorizePath: '/login/oauth/authorize',
     tokenHost: 'https://github.com',
     tokenPath: '/login/oauth/access_token',
-  };
+  },
+  [OAuthProvidersEnum.MICROSOFT]: {
+    authorizeHost: 'https://login.microsoftonline.com',
+    authorizePath: '/common/oauth2/v2.0/authorize',
+    tokenHost: 'https://login.microsoftonline.com',
+    tokenPath: '/common/oauth2/v2.0/token',
+  },
+};
 
+export class OAuthClass {
   private static userDataUrls: Record<OAuthProvidersEnum, string> = {
     [OAuthProvidersEnum.GOOGLE]:
       'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -64,7 +72,7 @@ export class OAuthClass {
   ) {
     this.code = new AuthorizationCode({
       client,
-      auth: OAuthClass[provider],
+      auth: OAuthProviders[provider],
     });
     this.authorization = this.genAuthorization(provider, url);
     this.userDataUrl = OAuthClass.userDataUrls[provider];
@@ -120,12 +128,12 @@ export class OAuthClass {
     return this.code.authorizeURL(this.authorization);
   }
 
-  public async getToken(code: string): Promise<string> {
+  public async getToken(code: string) {
     const result = await this.code.getToken({
       code,
       redirect_uri: this.authorization.redirect_uri,
       scope: this.authorization.scope,
     });
-    return result.token.access_token as string;
+    return result.token.access_token;
   }
 }

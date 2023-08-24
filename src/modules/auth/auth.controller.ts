@@ -21,7 +21,6 @@ import { Request, Response } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { GetUser } from 'src/shared/decorators/user.decorator';
 import { JwtAuthGuard } from 'src/shared/guards/jwt.guard';
-import { UserDocument } from '../users/schemas/users.schema';
 import { AuthService, REFRESH_TOKEN_EXPIRE_IN } from './auth.service';
 import {
   ChangePasswordDto,
@@ -31,6 +30,7 @@ import {
   SignUpDto,
 } from './dto/auth.dto';
 import { TokenPayloadDto } from './dto/token-payload.dto';
+import { User } from '@prisma/client';
 
 @Controller()
 @ApiTags('Auth')
@@ -75,7 +75,7 @@ export class AuthController {
   @Put('/verify-email')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  verifyEmail(@GetUser() user: UserDocument) {
+  verifyEmail(@GetUser() user: User) {
     return this.authService.verifyEmail(user);
   }
 
@@ -83,7 +83,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   confirmEmail(
-    @GetUser() user: UserDocument,
+    @GetUser() user: User,
     @Body(ValidationPipe) confirmEmailDto: ConfirmEmailDto,
   ) {
     return this.authService.confirmEmail(user, confirmEmailDto.code);
@@ -97,15 +97,14 @@ export class AuthController {
   ) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    const jwtObject = jwt.decode(token) as { userId: string };
+    const jwtObject = jwt.decode(token);
+    if (typeof jwtObject === 'string')
+      throw new UnauthorizedException('Invalid token');
     const userID = jwtObject?.userId;
     const refreshToken = req.cookies.refreshToken;
     if (!userID || !refreshToken)
       throw new UnauthorizedException('Invalid token');
-    const data = await this.authService.refreshToken(
-      refreshToken,
-      userID as string,
-    );
+    const data = await this.authService.refreshToken(refreshToken, userID);
     response.cookie('refreshToken', data.refreshToken, {
       maxAge: REFRESH_TOKEN_EXPIRE_IN * 1000,
       sameSite: 'none',
@@ -120,7 +119,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   changePassword(
-    @GetUser() user: UserDocument,
+    @GetUser() user: User,
     @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(changePasswordDto, user);
@@ -129,7 +128,7 @@ export class AuthController {
   @Put('/logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logout(@GetUser() user: UserDocument) {
+  async logout(@GetUser() user: User) {
     await this.authService.logout(user);
     return {
       message: 'Logout successfully',
@@ -139,7 +138,7 @@ export class AuthController {
   @Get('/profile')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async profile(@GetUser() user: UserDocument) {
+  async profile(@GetUser() user: User) {
     return user;
   }
 }

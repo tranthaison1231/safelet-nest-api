@@ -1,11 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { OAuthProvider } from './oauth_providers.schema';
-
-export enum UserRole {
-  user = 'user',
-  admin = 'admin',
-}
+import { Role } from 'src/modules/roles/schemas/roles.schema';
 
 export type UserDocument = HydratedDocument<User>;
 
@@ -50,11 +46,11 @@ export class User {
   avatarURL: string;
 
   @Prop({
-    type: String,
-    enum: [UserRole.admin, UserRole.user],
-    default: UserRole.user,
+    type: [Types.ObjectId],
+    ref: Role.name,
+    default: [],
   })
-  role: string;
+  roles: Role[];
 
   @Prop({
     type: [Types.ObjectId],

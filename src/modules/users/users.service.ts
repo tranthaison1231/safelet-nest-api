@@ -9,6 +9,7 @@ import { comparePassword, hashPassword } from 'src/shared/utils/password';
 import { SignInDto, SignUpDto } from '../auth/dto/auth.dto';
 import { OAuthProvidersEnum } from './enums/oauth-providers.enum';
 import { PrismaService } from 'nestjs-prisma';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -47,7 +48,10 @@ export class UsersService {
       });
       return user;
     } catch (error) {
-      if (error.code === ERROR_CODE.CONFLICT) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === ERROR_CODE.CONFLICT
+      ) {
         throw new ConflictException('Email already exists');
       } else {
         throw new InternalServerErrorException(error);

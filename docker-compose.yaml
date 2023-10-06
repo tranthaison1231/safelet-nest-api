@@ -1,0 +1,12 @@
+version: '3.5'
+
+services:
+  app:
+    build: 
+      context: .
+    container_name: nest-docker
+    environment:
+      - DATABASE_URL='mysql://wqbs4n19kuyu9dnbro83:pscale_pw_iH6CZ6bNjSkIj7yjWWrmR3wFO5E6cpGkGcgmJ1rqS2s@aws.connect.psdb.cloud/safelet?sslaccept=strict'
+    ports:
+      - '3000:3000'
+  
